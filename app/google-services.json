@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1057563270658",
+    "project_id": "habitseedapp",
+    "storage_bucket": "habitseedapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1057563270658:android:4dca506a124b8f6b20111b",
+        "android_client_info": {
+          "package_name": "com.bismilahexpo.habitseed"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGgsNAqg_3E1Mhcf7Bq2cf3TVTFbJGDRI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
