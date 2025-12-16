@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.bismilahexpo.habitseed",
+      "sha256_cert_fingerprints": [
+        "E1:F0:5C:C6:48:E9:B1:D4:CC:BC:CE:49:0B:73:F3:B0:29:0D:6A:B4:94:AB:9C:DE:CA:90:F5:91:9B:26:17:DC"
+      ]
+    }
+  }
+]

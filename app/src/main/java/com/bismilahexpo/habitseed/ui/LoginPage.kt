@@ -21,7 +21,7 @@ fun LoginPage(navController: NavController) {
     val context = LocalContext.current
 
     // PENTING: Ganti <USERNAME-ANDA> dengan username GitHub Anda.
-    val url = "https://<USERNAME-ANDA>.github.io/finishLogin"
+    val url = "https://agninugroho.github.io/finishLogin"
 
     val actionCodeSettings = ActionCodeSettings.newBuilder()
         .setUrl(url) // <-- Menggunakan URL GitHub Pages
