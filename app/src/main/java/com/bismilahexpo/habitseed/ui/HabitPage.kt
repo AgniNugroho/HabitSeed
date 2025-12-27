@@ -2,6 +2,7 @@ package com.bismilahexpo.habitseed.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +29,8 @@ fun HabitPage(
     onAddHabit: (String, String) -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var selectedHabitForEvidence by remember { mutableStateOf<Habit?>(null) }
+    var showEvidenceDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -64,7 +67,18 @@ fun HabitPage(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     items(habits) { habit ->
-                        HabitCard(habit = habit, onToggle = onToggleHabit)
+                        HabitCard(
+                            habit = habit, 
+                            onToggle = { 
+                                if (!habit.isCompleted) {
+                                    selectedHabitForEvidence = habit
+                                    showEvidenceDialog = true
+                                } else {
+                                    // Just toggle off (remove evidence)
+                                    onToggleHabit(habit.copy(isCompleted = false, evidenceUri = null))
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -91,6 +105,19 @@ fun HabitPage(
                 }
             )
         }
+        
+        if (showEvidenceDialog && selectedHabitForEvidence != null) {
+            com.bismilahexpo.habitseed.ui.components.EvidenceUploadDialog(
+                onDismiss = { showEvidenceDialog = false },
+                onEvidenceSelected = { uri ->
+                    selectedHabitForEvidence?.let { habit ->
+                         onToggleHabit(habit.copy(isCompleted = true, evidenceUri = uri.toString()))
+                    }
+                    showEvidenceDialog = false
+                    selectedHabitForEvidence = null
+                }
+            )
+        }
     }
 }
 
@@ -101,23 +128,39 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(LightCardBackground)
-            .clickable { onToggle(habit.copy(isCompleted = !habit.isCompleted)) }
+            .clickable { onToggle(habit) }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
-            Text(
-                text = habit.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = LightPrimaryContent,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = habit.goal,
-                style = MaterialTheme.typography.bodyMedium,
-                color = LightSecondaryContent
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+             if (habit.isCompleted && habit.evidenceUri != null) {
+                 AsyncImage(
+                     model = habit.evidenceUri,
+                     contentDescription = "Bukti",
+                     modifier = Modifier
+                         .size(50.dp)
+                         .clip(RoundedCornerShape(8.dp)),
+                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                 )
+                 Spacer(modifier = Modifier.width(16.dp))
+             }
+             
+             Column {
+                Text(
+                    text = habit.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = LightPrimaryContent,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = habit.goal,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LightSecondaryContent
+                )
+            }
         }
         
         Box(
