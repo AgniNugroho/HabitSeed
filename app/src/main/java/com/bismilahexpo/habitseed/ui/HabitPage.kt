@@ -1,0 +1,207 @@
+package com.bismilahexpo.habitseed.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.bismilahexpo.habitseed.model.Habit
+import com.bismilahexpo.habitseed.ui.theme.*
+
+@Composable
+fun HabitPage(
+    habits: List<Habit>,
+    onToggleHabit: (Habit) -> Unit,
+    onAddHabit: (String, String) -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBackground)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+        ) {
+            Text(
+                "Habit",
+                style = MaterialTheme.typography.titleLarge,
+                color = LightPrimaryContent,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (habits.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Belum ada habit, yuk tambah!",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = LightSecondaryContent
+                    )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    items(habits) { habit ->
+                        HabitCard(habit = habit, onToggle = onToggleHabit)
+                    }
+                }
+            }
+        }
+
+        // FAB
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(24.dp),
+            containerColor = SeedGreen,
+            contentColor = LightPrimaryContent
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Tambah Habit")
+        }
+
+        if (showAddDialog) {
+            AddHabitDialog(
+                onDismiss = { showAddDialog = false },
+                onAdd = { name, goal ->
+                    onAddHabit(name, goal)
+                    showAddDialog = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(LightCardBackground)
+            .clickable { onToggle(habit.copy(isCompleted = !habit.isCompleted)) }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(
+                text = habit.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = LightPrimaryContent,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = habit.goal,
+                style = MaterialTheme.typography.bodyMedium,
+                color = LightSecondaryContent
+            )
+        }
+        
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(if (habit.isCompleted) SeedGreen else Color.Transparent, CircleShape)
+                .padding(4.dp)
+                .run {
+                    if (!habit.isCompleted) {
+                        this.background(Color.Gray.copy(alpha = 0.1f))
+                    } else this
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (habit.isCompleted) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = LightCardBackground,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AddHabitDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var goal by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tambah Habit", color = LightPrimaryContent) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nama Habit") },
+                    singleLine = true,
+                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = LightPrimaryContent,
+                        unfocusedTextColor = LightPrimaryContent,
+                        focusedBorderColor = SeedGreen,
+                        unfocusedBorderColor = LightSecondaryContent,
+                        focusedLabelColor = SeedGreen,
+                        unfocusedLabelColor = LightSecondaryContent,
+                        cursorColor = SeedGreen
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = goal,
+                    onValueChange = { goal = it },
+                    label = { Text("Target Habit") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = LightPrimaryContent,
+                        unfocusedTextColor = LightPrimaryContent,
+                        focusedBorderColor = SeedGreen,
+                        unfocusedBorderColor = LightSecondaryContent,
+                        focusedLabelColor = SeedGreen,
+                        unfocusedLabelColor = LightSecondaryContent,
+                        cursorColor = SeedGreen
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (name.isNotBlank()) onAdd(name, goal) },
+                colors = ButtonDefaults.buttonColors(containerColor = SeedGreen, contentColor = Color.White)
+            ) {
+                Text("Tanam Habit")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Kembali", color = LightSecondaryContent)
+            }
+        },
+        containerColor = LightCardBackground,
+        textContentColor = LightSecondaryContent
+    )
+}
