@@ -32,27 +32,12 @@ fun EvidenceUploadDialog(
     fun createTempPictureUri(): Uri {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val imageFileName = "JPEG_" + timeStamp + "_"
-        // Use cacheDir for simplicity first, but FileProvider is better for full support.
-        // Assuming we might need FileProvider for Camera. For now, try simple approach or prepare for FileProvider.
-        // If FileProvider is missing, this will crash. 
-        // Let's use a safe approach: save to external cache if possible, or internal if FileProvider matches?
-        // Actually, without FileProvider configured in manifest, I cannot share file:// URI to Camera app.
-        // I will try to use a simple hack or expect FileProvider setup.
-        // For this step, I will implement the logic. If it crashes, I'll add FileProvider.
-        
         val storageDir = context.externalCacheDir ?: context.cacheDir
         val file = File.createTempFile(imageFileName, ".jpg", storageDir)
-        
-        // IMPORTANT: This requires <provider> in Manifest if targeting API 24+
-        // I will just return Uri.fromFile(file) which might fail with FileUriExposedException.
-        // To fix properly, I need to add FileProvider.
-        // For now, I'll attempt using FileProvider assuming I will add it in next steps if needed?
-        // No, I should add it now if I use getUriForFile.
-        // Let's defer FileProvider setup and assume the user MIGHT crash if I don't add it.
-        // I'll add the FileProvider configuration in the next step.
-        return androidx.core.content.FileProvider.getUriForFile(
-             context, 
-             "${context.packageName}.fileprovider", 
+
+        return FileProvider.getUriForFile(
+             context,
+             "${context.packageName}.fileprovider",
              file
         )
     }

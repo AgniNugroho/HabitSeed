@@ -14,6 +14,8 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.ActionCodeSettings
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
+import com.bismilahexpo.habitseed.ui.theme.*
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun RegisterPage(navController: NavController) {
@@ -34,7 +36,7 @@ fun RegisterPage(navController: NavController) {
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = LightBackground
     ) {
         Column(
             modifier = Modifier
@@ -47,13 +49,13 @@ fun RegisterPage(navController: NavController) {
             Text(
                 text = "Join HabitSeed",
                 style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.primary
+                color = SeedGreen
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Start your journey today.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                color = LightSecondaryContent
             )
 
             Spacer(modifier = Modifier.height(48.dp))
@@ -66,10 +68,13 @@ fun RegisterPage(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
+                    focusedBorderColor = SeedGreen,
+                    unfocusedBorderColor = LightSecondaryContent,
+                    focusedLabelColor = SeedGreen,
+                    unfocusedLabelColor = LightSecondaryContent,
+                    cursorColor = SeedGreen,
+                    focusedTextColor = LightPrimaryContent,
+                    unfocusedTextColor = LightPrimaryContent
                 ),
                 shape = MaterialTheme.shapes.medium
             )
@@ -83,10 +88,13 @@ fun RegisterPage(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
+                    focusedBorderColor = SeedGreen,
+                    unfocusedBorderColor = LightSecondaryContent,
+                    focusedLabelColor = SeedGreen,
+                    unfocusedLabelColor = LightSecondaryContent,
+                    cursorColor = SeedGreen,
+                    focusedTextColor = LightPrimaryContent,
+                    unfocusedTextColor = LightPrimaryContent
                 ),
                 shape = MaterialTheme.shapes.medium
             )
@@ -149,8 +157,8 @@ fun RegisterPage(navController: NavController) {
                     .height(50.dp),
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = SeedGreen,
+                    contentColor = Color.White
                 )
             ) {
                 Text(
@@ -164,7 +172,7 @@ fun RegisterPage(navController: NavController) {
             TextButton(onClick = { navController.navigate("login") }) {
                 Text(
                     text = "Already have an account? Login",
-                    color = MaterialTheme.colorScheme.primary
+                    color = SeedGreen
                 )
             }
         }

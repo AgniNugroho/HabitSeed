@@ -89,7 +89,7 @@ fun HabitPage(
             onClick = { showAddDialog = true },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(24.dp),
+                .padding(end = 24.dp, bottom = 100.dp),
             containerColor = SeedGreen,
             contentColor = LightPrimaryContent
         ) {
@@ -163,26 +163,24 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
             }
         }
         
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(if (habit.isCompleted) SeedGreen else Color.Transparent, CircleShape)
-                .padding(4.dp)
-                .run {
-                    if (!habit.isCompleted) {
-                        this.background(Color.Gray.copy(alpha = 0.1f))
-                    } else this
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            if (habit.isCompleted) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = null,
-                    tint = LightCardBackground,
-                    modifier = Modifier.size(20.dp)
-                )
+        if (habit.isCompleted) {
+            Text(
+                text = "Selesai",
+                color = SeedGreen,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+        } else {
+            Button(
+                onClick = { onToggle(habit) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SeedGreen,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Selesaikan")
             }
         }
     }

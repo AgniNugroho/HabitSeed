@@ -9,6 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +46,7 @@ import com.bismilahexpo.habitseed.ui.theme.SeedGreen
 import com.bismilahexpo.habitseed.ui.theme.HabitSeedTheme
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
 
 class MainActivity : ComponentActivity() {
 
@@ -73,19 +77,158 @@ fun AppNavigation(intent: Intent) {
     val context = LocalContext.current
     
     var habits by remember { mutableStateOf(listOf<Habit>()) }
+    var userName by remember { mutableStateOf("User") }
     
+    LaunchedEffect(Unit) {
+        val auth = Firebase.auth
+        val db = Firebase.firestore
+        
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val currentUser = firebaseAuth.currentUser
+            if (currentUser != null) {
+                if (!currentUser.displayName.isNullOrBlank()) {
+                    userName = currentUser.displayName!!
+                } else {
+                    currentUser.email?.let { email ->
+                        db.collection("users")
+                            .whereEqualTo("email", email)
+                            .get()
+                            .addOnSuccessListener { documents ->
+                                if (!documents.isEmpty) {
+                                    val name = documents.documents[0].getString("username")
+                                    if (!name.isNullOrBlank()) {
+                                        userName = name
+                                    }
+                                }
+                            }
+                    }
+                }
+            } else {
+                userName = "?"
+            }
+        }
+        
+        auth.addAuthStateListener(listener)
+    }
+
+    // Habits Real-time Listener
+    LaunchedEffect(Unit) {
+        val auth = Firebase.auth
+        val db = Firebase.firestore
+        
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val currentUser = firebaseAuth.currentUser
+            if (currentUser != null) {
+                // Listen to Habits
+                 db.collection("users").document(currentUser.uid).collection("habits")
+                     .addSnapshotListener { snapshots, e ->
+                         if (e != null) {
+                             return@addSnapshotListener
+                         }
+                         if (snapshots != null) {
+                             val fetchedHabits = snapshots.toObjects(Habit::class.java)
+                             habits = fetchedHabits
+                         }
+                     }
+            } else {
+                habits = emptyList()
+            }
+        }
+        auth.addAuthStateListener(listener)
+    }
+    
+
+    LaunchedEffect(user) {
+        if (user != null && userName == "User") {
+             if (!user.displayName.isNullOrBlank()) {
+                userName = user.displayName!!
+            } else {
+                val db = Firebase.firestore
+                user.email?.let { email ->
+                     db.collection("users").whereEqualTo("email", email).get()
+                        .addOnSuccessListener { docs ->
+                            if (!docs.isEmpty) userName = docs.documents[0].getString("username") ?: "User"
+                        }
+                }
+            }
+        }
+    }
+
     LaunchedEffect(intent) {
         handleSignInLink(intent, context, navController)
     }
 
-    Scaffold(
-        bottomBar = {
+    Scaffold { innerPadding ->
+        Box(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            NavHost(
+                navController = navController, 
+                startDestination = startDestination,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                composable("login") {
+                    LoginPage(navController = navController)
+                }
+                composable("register") {
+                    RegisterPage(navController = navController)
+                }
+                composable("home") {
+                    HomePage(
+                        userName = userName,
+                        habits = habits,
+                        onLogout = {
+                             Firebase.auth.signOut()
+                             navController.navigate("login") { popUpTo(0) }
+                        }
+                    )
+                }
+                composable("habits") {
+                    HabitPage(
+                        habits = habits,
+                        onToggleHabit = { updatedHabit ->
+                            val user = Firebase.auth.currentUser
+                            if (user != null) {
+                                val db = Firebase.firestore
+                                db.collection("users").document(user.uid)
+                                    .collection("habits").document(updatedHabit.id)
+                                    .set(updatedHabit)
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(context, "Gagal update habit: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        },
+                        onAddHabit = { name, goal ->
+                            val user = Firebase.auth.currentUser
+                            if (user != null) {
+                                val newHabit = Habit(name = name, goal = goal)
+                                val db = Firebase.firestore
+                                db.collection("users").document(user.uid)
+                                    .collection("habits").document(newHabit.id)
+                                    .set(newHabit)
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "Habit ditanam!", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(context, "Gagal simpan habit: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            } else {
+                                Toast.makeText(context, "Silakan login ulang.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    )
+                }
+            }
+
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
             
             if (currentRoute == "home" || currentRoute == "habits") {
                 androidx.compose.material3.Card(
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .padding(16.dp),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
                     elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 8.dp),
@@ -137,40 +280,6 @@ fun AppNavigation(intent: Intent) {
                          )
                      }
                 }
-            }
-        }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController, 
-            startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable("login") {
-                LoginPage(navController = navController)
-            }
-            composable("register") {
-                RegisterPage(navController = navController)
-            }
-            composable("home") {
-                HomePage(
-                    userName = user?.displayName ?: "?",
-                    habits = habits,
-                    onLogout = {
-                         Firebase.auth.signOut()
-                         navController.navigate("login") { popUpTo(0) }
-                    }
-                )
-            }
-            composable("habits") {
-                HabitPage(
-                    habits = habits,
-                    onToggleHabit = { updatedHabit ->
-                        habits = habits.map { if (it.id == updatedHabit.id) updatedHabit else it }
-                    },
-                    onAddHabit = { name, goal ->
-                        habits = habits + Habit(name = name, goal = goal)
-                    }
-                )
             }
         }
     }

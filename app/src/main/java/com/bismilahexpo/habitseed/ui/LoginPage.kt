@@ -15,6 +15,8 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.ActionCodeSettings
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
+import com.bismilahexpo.habitseed.ui.theme.*
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun LoginPage(navController: NavController) {
@@ -35,7 +37,7 @@ fun LoginPage(navController: NavController) {
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background 
+        color = LightBackground
     ) {
         Column(
             modifier = Modifier
@@ -48,13 +50,13 @@ fun LoginPage(navController: NavController) {
             Text(
                 text = "HabitSeed", 
                 style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.primary 
+                color = SeedGreen
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Plant your habits, grow your life.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                color = LightSecondaryContent
             )
 
             Spacer(modifier = Modifier.height(48.dp))
@@ -62,7 +64,7 @@ fun LoginPage(navController: NavController) {
             Text(
                 text = "Welcome Back", 
                 style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                color = LightPrimaryContent
             )
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -73,10 +75,13 @@ fun LoginPage(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
+                    focusedBorderColor = SeedGreen,
+                    unfocusedBorderColor = LightSecondaryContent,
+                    focusedLabelColor = SeedGreen,
+                    unfocusedLabelColor = LightSecondaryContent,
+                    cursorColor = SeedGreen,
+                    focusedTextColor = LightPrimaryContent,
+                    unfocusedTextColor = LightPrimaryContent
                 ),
                 shape = MaterialTheme.shapes.medium
             )
@@ -85,19 +90,15 @@ fun LoginPage(navController: NavController) {
 
             Button(
                 onClick = {
-                    val cleanEmail = email.trim() // Hapus spasi tidak sengaja
+                    val cleanEmail = email.trim() 
                     if (cleanEmail.isNotBlank()) {
                         val db = com.google.firebase.Firebase.firestore
                         
-                        // Debugging: Beri tahu user apa yang sedang dicari
-                        // Toast.makeText(context, "Mencek: '$cleanEmail'", Toast.LENGTH_SHORT).show() 
-
                         db.collection("users")
                             .whereEqualTo("email", cleanEmail)
                             .get()
                             .addOnSuccessListener { documents ->
                                 if (!documents.isEmpty) {
-                                    // Email found, proceed to send link
                                     Firebase.auth.sendSignInLinkToEmail(cleanEmail, actionCodeSettings)
                                         .addOnCompleteListener { task ->
                                             if (task.isSuccessful) {
@@ -108,7 +109,6 @@ fun LoginPage(navController: NavController) {
                                             }
                                         }
                                 } else {
-                                    // Email not found
                                     Toast.makeText(context, "Email '$cleanEmail' tidak ditemukan di database.", Toast.LENGTH_LONG).show()
                                     navController.navigate("register")
                                 }
@@ -125,22 +125,102 @@ fun LoginPage(navController: NavController) {
                     .height(50.dp),
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = SeedGreen,
+                    contentColor = Color.White
                 )
-            ) {
+                ) {
                 Text(
-                    text = "Login with Email Link",
+                    text = "Login dengan Email Link",
                     style = MaterialTheme.typography.titleMedium
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(context.getString(com.bismilahexpo.habitseed.R.string.default_web_client_id))
+                .requestEmail()
+                .build()
+
+            val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+
+            val googleLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == android.app.Activity.RESULT_OK) {
+                    val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                    try {
+                        val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                        val idToken = account.idToken
+                        val email = account.email
+
+                        if (idToken != null && email != null) {
+                            val db = Firebase.firestore
+                            db.collection("users")
+                                .whereEqualTo("email", email)
+                                .get()
+                                .addOnSuccessListener { documents ->
+                                    if (!documents.isEmpty) {
+                                        val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
+                                        Firebase.auth.signInWithCredential(credential)
+                                            .addOnCompleteListener { authTask ->
+                                                if (authTask.isSuccessful) {
+                                                     val user = Firebase.auth.currentUser
+                                                     saveEmail(context, email)
+                                                     
+                                                     if (user != null) {
+                                                         db.collection("users").document(user.uid)
+                                                             .update("lastLogin", System.currentTimeMillis())
+                                                     }
+                                                     
+                                                     Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT).show()
+                                                     navController.navigate("home") { popUpTo(0) }
+                                                } else {
+                                                    Toast.makeText(context, "Login Gagal: ${authTask.exception?.message}", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                    } else {
+                                        Toast.makeText(context, "Email belum terdaftar. Silakan daftar terlebih dahulu.", Toast.LENGTH_LONG).show()
+                                        googleSignInClient.signOut()
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(context, "Gagal mengecek email: ${e.message}", Toast.LENGTH_LONG).show()
+                                    googleSignInClient.signOut()
+                                }
+                        } else {
+                            Toast.makeText(context, "Gagal Login: ID Token tidak ditemukan. Cek konfigurasi google-services.json.", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: com.google.android.gms.common.api.ApiException) {
+                        Toast.makeText(context, "Google Sign In Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+
+            // OutlinedButton(
+            //     onClick = {
+            //         googleSignInClient.signOut() // Ensure fresh login
+            //         googleLauncher.launch(googleSignInClient.signInIntent)
+            //     },
+            //     modifier = Modifier.fillMaxWidth().height(50.dp),
+            //     shape = MaterialTheme.shapes.medium,
+            //      colors = ButtonDefaults.outlinedButtonColors(
+            //         contentColor = SeedGreen
+            //     ),
+            //     border = androidx.compose.foundation.BorderStroke(1.dp, SeedGreen)
+            // ) {
+            //      Row(verticalAlignment = Alignment.CenterVertically) {
+            //         // Placeholder for G icon if needed, or just text
+            //         Text("Login dengan Google", style = MaterialTheme.typography.titleMedium)
+            //     }
+            // }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             TextButton(onClick = { navController.navigate("register") }) {
                 Text(
-                    text = "Don't have an account? Sign Up",
-                    color = MaterialTheme.colorScheme.primary
+                    text = "Belum punya akun? Daftar",
+                    color = SeedGreen
                 )
             }
         }

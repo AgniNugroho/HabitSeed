@@ -12,7 +12,12 @@
           "package_name": "com.bismilahexpo.habitseed"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1057563270658-jujj4pvmt0jk3qhuccvv08kg2upj4q2k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDGgsNAqg_3E1Mhcf7Bq2cf3TVTFbJGDRI"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1057563270658-jujj4pvmt0jk3qhuccvv08kg2upj4q2k.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
