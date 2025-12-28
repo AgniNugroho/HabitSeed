@@ -244,7 +244,6 @@ fun AppNavigation(intent: Intent) {
                                     if (updatedHabit.id != null) {
                                         var finalEvidenceUri = updatedHabit.evidenceUri
                                         
-                                        // If evidence is a local URI, upload it to storage
                                         if (finalEvidenceUri != null && (finalEvidenceUri.startsWith("content://") || finalEvidenceUri.startsWith("file://"))) {
                                             try {
                                                 val uri = android.net.Uri.parse(finalEvidenceUri)
@@ -253,22 +252,28 @@ fun AppNavigation(intent: Intent) {
                                                 if (bytes != null) {
                                                     val fileName = "${System.currentTimeMillis()}.jpg"
                                                     val bucket = Supabase.client.storage.from("habit-evidence")
+                                                    
                                                     bucket.upload(fileName, bytes)
+                                                    
                                                     finalEvidenceUri = bucket.publicUrl(fileName)
+                                                } else {
                                                 }
                                                 inputStream?.close()
                                             } catch (e: Exception) {
-                                                android.util.Log.e("MainActivity", "Error uploading image", e)
+                                                localScope.launch {
+                                                    Toast.makeText(context, "Gagal upload: ${e.message}", Toast.LENGTH_LONG).show()
+                                                }
                                             }
                                         }
 
-                                        val jsonString = """
-                                            {
-                                                "is_completed": ${updatedHabit.isCompleted},
-                                                "evidence_uri": ${if (finalEvidenceUri != null) "\"$finalEvidenceUri\"" else "null"}
+                                        val updateData = buildJsonObject {
+                                            put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
+                                            if (finalEvidenceUri != null) {
+                                                put("evidence_uri", JsonPrimitive(finalEvidenceUri))
+                                            } else {
+                                                put("evidence_uri", JsonPrimitive(null as String?))
                                             }
-                                        """.trimIndent()
-                                        val updateData = kotlinx.serialization.json.Json.parseToJsonElement(jsonString)
+                                        }
 
                                         Supabase.client.from("habits").update(updateData) {
                                             filter { eq("id", updatedHabit.id) }
@@ -280,19 +285,15 @@ fun AppNavigation(intent: Intent) {
                                                 val currUser = Supabase.client.auth.currentUserOrNull()
                                                 val currChall = currentChallenge
                                                 if (currUser != null && currChall != null) {
-                                                    val challJson = """
-                                                        {
-                                                            "user_id": "${currUser.id}",
-                                                            "challenge_id": "${currChall.id}",
-                                                            "completed_at": "${java.time.LocalDate.now()}"
-                                                        }
-                                                    """.trimIndent()
-                                                    val challData = kotlinx.serialization.json.Json.parseToJsonElement(challJson)
+                                                    val challData = buildJsonObject {
+                                                        put("user_id", JsonPrimitive(currUser.id))
+                                                        put("challenge_id", JsonPrimitive(currChall.id!!))
+                                                        put("completed_at", JsonPrimitive(java.time.LocalDate.now().toString()))
+                                                    }
                                                     Supabase.client.from("user_challenges").insert(challData)
                                                     isChallengeCompleted = true
                                                 }
                                             } catch (e: Exception) {
-                                                android.util.Log.e("MainActivity", "Error syncing user_challenges", e)
                                             }
                                         }
                                         
@@ -305,9 +306,7 @@ fun AppNavigation(intent: Intent) {
                                         }
                                     }
                                 } catch(e: Exception) {
-                                    android.util.Log.e("MainActivity", "Error updating habit", e)
                                     Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                    e.printStackTrace()
                                 }
                             }
                         },
