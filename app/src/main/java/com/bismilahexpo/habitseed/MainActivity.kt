@@ -44,9 +44,12 @@ import com.bismilahexpo.habitseed.model.Habit
 import com.bismilahexpo.habitseed.ui.HabitPage
 import com.bismilahexpo.habitseed.ui.theme.SeedGreen
 import com.bismilahexpo.habitseed.ui.theme.HabitSeedTheme
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.firestore
+import com.bismilahexpo.habitseed.data.Supabase
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -72,90 +75,59 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation(intent: Intent) {
     val navController = rememberNavController()
-    val user = Firebase.auth.currentUser
-    val startDestination = "home" // if (user != null) "home" else "login"
-    val context = LocalContext.current
-    
     var habits by remember { mutableStateOf(listOf<Habit>()) }
     var userName by remember { mutableStateOf("User") }
+    var user by remember { mutableStateOf(Supabase.client.auth.currentUserOrNull()) }
+    
+    val localScope = androidx.compose.runtime.rememberCoroutineScope()
+    val context = LocalContext.current
+    val startDestination = if (user != null) "home" else "login"
     
     LaunchedEffect(Unit) {
-        val auth = Firebase.auth
-        val db = Firebase.firestore
-        
-        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
-            val currentUser = firebaseAuth.currentUser
-            if (currentUser != null) {
-                if (!currentUser.displayName.isNullOrBlank()) {
-                    userName = currentUser.displayName!!
-                } else {
-                    currentUser.email?.let { email ->
-                        db.collection("users")
-                            .whereEqualTo("email", email)
-                            .get()
-                            .addOnSuccessListener { documents ->
-                                if (!documents.isEmpty) {
-                                    val name = documents.documents[0].getString("username")
-                                    if (!name.isNullOrBlank()) {
-                                        userName = name
-                                    }
-                                }
-                            }
-                    }
-                }
-            } else {
-                userName = "?"
-            }
+        Supabase.client.auth.sessionStatus.collectLatest { status ->
+             if (status is SessionStatus.Authenticated) {
+                 user = Supabase.client.auth.currentUserOrNull()
+             } else {
+                 user = null
+             }
         }
-        
-        auth.addAuthStateListener(listener)
     }
-
-    // Habits Real-time Listener
-    LaunchedEffect(Unit) {
-        val auth = Firebase.auth
-        val db = Firebase.firestore
-        
-        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
-            val currentUser = firebaseAuth.currentUser
-            if (currentUser != null) {
-                // Listen to Habits
-                 db.collection("users").document(currentUser.uid).collection("habits")
-                     .addSnapshotListener { snapshots, e ->
-                         if (e != null) {
-                             return@addSnapshotListener
-                         }
-                         if (snapshots != null) {
-                             val fetchedHabits = snapshots.toObjects(Habit::class.java)
-                             habits = fetchedHabits
-                         }
-                     }
-            } else {
-                habits = emptyList()
-            }
-        }
-        auth.addAuthStateListener(listener)
-    }
-    
 
     LaunchedEffect(user) {
-        if (user != null && userName == "User") {
-             if (!user.displayName.isNullOrBlank()) {
-                userName = user.displayName!!
-            } else {
-                val db = Firebase.firestore
-                user.email?.let { email ->
-                     db.collection("users").whereEqualTo("email", email).get()
-                        .addOnSuccessListener { docs ->
-                            if (!docs.isEmpty) userName = docs.documents[0].getString("username") ?: "User"
-                        }
-                }
+        val currentUser = user    
+        if (currentUser != null) {
+            try {
+                 val result = Supabase.client.from("users").select {
+                     filter {
+                         eq("id", currentUser.id)
+                     }
+                 }.decodeSingleOrNull<Map<String, String>>()
+                 
+                 if (result != null) {
+                     userName = result["username"] ?: "User"
+                     Toast.makeText(context, "Berhasil Login!", Toast.LENGTH_SHORT).show()
+                 } else {
+                     userName = "User"
+                     Toast.makeText(context, "Data user tidak ditemukan di database", Toast.LENGTH_LONG).show()
+                 }
+            } catch (e: Exception) {
+                userName = "User"
+                Toast.makeText(context, "Error load username: ${e.message}", Toast.LENGTH_LONG).show()
+                e.printStackTrace()
             }
+            
+            try {
+                habits = Supabase.client.from("habits").select { 
+                    filter { eq("user_id", currentUser.id) }
+                }.decodeList()
+            } catch(e: Exception) { 
+                android.util.Log.e("MainActivity", "Error fetching habits", e)
+                e.printStackTrace()
+            }
+        } else {
+            habits = emptyList()
+            userName = "?"
         }
-    }
-
-    LaunchedEffect(intent) {
-        handleSignInLink(intent, context, navController)
     }
 
     Scaffold { innerPadding ->
@@ -179,9 +151,11 @@ fun AppNavigation(intent: Intent) {
                     HomePage(
                         userName = userName,
                         habits = habits,
-                        onLogout = {
-                             Firebase.auth.signOut()
-                             navController.navigate("login") { popUpTo(0) }
+                         onLogout = {
+                             localScope.launch {
+                                 Supabase.client.auth.signOut()
+                                 navController.navigate("login") { popUpTo(0) }
+                             }
                         }
                     )
                 }
@@ -189,33 +163,65 @@ fun AppNavigation(intent: Intent) {
                     HabitPage(
                         habits = habits,
                         onToggleHabit = { updatedHabit ->
-                            val user = Firebase.auth.currentUser
-                            if (user != null) {
-                                val db = Firebase.firestore
-                                db.collection("users").document(user.uid)
-                                    .collection("habits").document(updatedHabit.id)
-                                    .set(updatedHabit)
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Gagal update habit: ${e.message}", Toast.LENGTH_SHORT).show()
+                            localScope.launch {
+                                try {
+                                    if (updatedHabit.id != null) {
+                                        Supabase.client.from("habits").update(
+                                            {
+                                                set("is_completed", updatedHabit.isCompleted)
+                                                set("evidence_uri", updatedHabit.evidenceUri)
+                                            }
+                                        ) {
+                                            filter { eq("id", updatedHabit.id) }
+                                        }
+
+                                        val currentUser = Supabase.client.auth.currentUserOrNull()
+                                        if (currentUser != null) {
+                                            try {
+                                                habits = Supabase.client.from("habits").select { 
+                                                    filter { eq("user_id", currentUser.id) }
+                                                }.decodeList()
+                                            } catch(refreshError: Exception) {
+                                                android.util.Log.e("MainActivity", "Error refreshing habits", refreshError)
+                                            }
+                                        }
                                     }
+                                } catch(e: Exception) {
+                                    android.util.Log.e("MainActivity", "Error updating habit", e)
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                    e.printStackTrace()
+                                }
                             }
                         },
                         onAddHabit = { name, goal ->
-                            val user = Firebase.auth.currentUser
-                            if (user != null) {
-                                val newHabit = Habit(name = name, goal = goal)
-                                val db = Firebase.firestore
-                                db.collection("users").document(user.uid)
-                                    .collection("habits").document(newHabit.id)
-                                    .set(newHabit)
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "Habit ditanam!", Toast.LENGTH_SHORT).show()
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Gagal simpan habit: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            } else {
-                                Toast.makeText(context, "Silakan login ulang.", Toast.LENGTH_LONG).show()
+                            localScope.launch {
+                                val currentUser = Supabase.client.auth.currentUserOrNull()
+                                if (currentUser != null) {
+                                     val habitData = kotlinx.serialization.json.buildJsonObject {
+                                         put("user_id", kotlinx.serialization.json.JsonPrimitive(currentUser.id))
+                                         put("name", kotlinx.serialization.json.JsonPrimitive(name))
+                                         put("goal", kotlinx.serialization.json.JsonPrimitive(goal))
+                                         put("is_completed", kotlinx.serialization.json.JsonPrimitive(false))
+                                     }
+                                     
+                                     try {
+                                         Supabase.client.from("habits").insert(habitData)
+                                         Toast.makeText(context, "Habit ditanam!", Toast.LENGTH_SHORT).show()
+                                         
+                                         try {
+                                             habits = Supabase.client.from("habits").select { 
+                                                 filter { eq("user_id", currentUser.id) }
+                                             }.decodeList()
+                                         } catch(refreshError: Exception) {
+                                             android.util.Log.e("MainActivity", "Error refreshing habits", refreshError)
+                                         }
+                                     } catch(e: Exception) {
+                                         Toast.makeText(context, "Gagal: ${e.message}", Toast.LENGTH_LONG).show()
+                                         e.printStackTrace()
+                                     }
+                                } else {
+                                    Toast.makeText(context, "Silakan login ulang", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     )
@@ -282,34 +288,5 @@ fun AppNavigation(intent: Intent) {
                 }
             }
         }
-    }
-}
-
-private fun getEmail(context: Context): String? {
-    val sharedPref = context.getSharedPreferences("HabitSeedPrefs", Context.MODE_PRIVATE)
-    return sharedPref.getString("USER_EMAIL", null)
-}
-
-private fun handleSignInLink(intent: Intent, context: Context, navController: NavController) {
-    val auth = Firebase.auth
-    val emailLink = intent.data?.toString()
-
-    if (emailLink != null && auth.isSignInWithEmailLink(emailLink)) {
-        val email = getEmail(context)
-        if (email == null) {
-            Toast.makeText(context, "Gagal login: email tidak ditemukan. Silakan coba lagi.", Toast.LENGTH_LONG).show()
-            return
-        }
-        auth.signInWithEmailLink(email, emailLink)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    Toast.makeText(context, "Berhasil login!", Toast.LENGTH_SHORT).show()
-                    navController.navigate("home") {
-                        popUpTo(0)
-                    }
-                } else {
-                    Toast.makeText(context, "Gagal login: ${task.exception?.message}", Toast.LENGTH_LONG).show()
-                }
-            }
     }
 }

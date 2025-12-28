@@ -10,29 +10,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.google.firebase.Firebase
-import com.google.firebase.auth.ActionCodeSettings
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.firestore
+import com.bismilahexpo.habitseed.data.Supabase
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.launch
 import com.bismilahexpo.habitseed.ui.theme.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 
 @Composable
 fun RegisterPage(navController: NavController) {
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    val url = "https://agninugroho.github.io/finishLogin"
-    val actionCodeSettings = ActionCodeSettings.newBuilder()
-        .setUrl(url)
-        .setHandleCodeInApp(true)
-        .setAndroidPackageName(
-            "com.bismilahexpo.habitseed",
-            true,
-            null
-        )
-        .build()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -45,7 +44,6 @@ fun RegisterPage(navController: NavController) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
             Text(
                 text = "Join HabitSeed",
                 style = MaterialTheme.typography.displaySmall,
@@ -60,7 +58,6 @@ fun RegisterPage(navController: NavController) {
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Form
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
@@ -99,79 +96,103 @@ fun RegisterPage(navController: NavController) {
                 shape = MaterialTheme.shapes.medium
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = if (passwordVisible) "Hide password" else "Show password")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SeedGreen,
+                    unfocusedBorderColor = LightSecondaryContent,
+                    focusedLabelColor = SeedGreen,
+                    unfocusedLabelColor = LightSecondaryContent,
+                    cursorColor = SeedGreen,
+                    focusedTextColor = LightPrimaryContent,
+                    unfocusedTextColor = LightPrimaryContent
+                ),
+                shape = MaterialTheme.shapes.medium
+            )
+
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
                     val cleanEmail = email.trim()
                     val cleanUsername = username.trim()
-
-                    if (cleanEmail.isNotBlank() && cleanUsername.isNotBlank()) {
-                        val db = Firebase.firestore
-                        val auth = Firebase.auth
-
-                        // 1. Check if email exists
-                        db.collection("users")
-                            .whereEqualTo("email", cleanEmail)
-                            .get()
-                            .addOnSuccessListener { documents ->
-                                if (!documents.isEmpty) {
-                                    Toast.makeText(context, "Email sudah terdaftar. Silakan login.", Toast.LENGTH_LONG).show()
-                                } else {
-                                    // 2. Create new user
-                                    val newUser = hashMapOf(
-                                        "username" to cleanUsername,
-                                        "email" to cleanEmail,
-                                        "createdAt" to System.currentTimeMillis()
-                                    )
-
-                                    db.collection("users")
-                                        .add(newUser)
-                                        .addOnSuccessListener { docRef ->
-                                            // 3. Send Verification Link
-                                            auth.sendSignInLinkToEmail(cleanEmail, actionCodeSettings)
-                                                .addOnCompleteListener { task ->
-                                                    if (task.isSuccessful) {
-                                                        saveEmail(context, cleanEmail)
-                                                        Toast.makeText(context, "SUCCESS! Cek email untuk login.", Toast.LENGTH_LONG).show()
-                                                        navController.navigate("login")
-                                                    } else {
-                                                        Toast.makeText(context, "Gagal kirim link: ${task.exception?.message}", Toast.LENGTH_LONG).show()
-                                                    }
-                                                }
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(context, "Gagal menyimpan data: ${e.message}", Toast.LENGTH_LONG).show()
-                                        }
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(context, "Error database: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
+                    val cleanPassword = password
+                    
+                    if (cleanEmail.isNotBlank() && cleanUsername.isNotBlank() && cleanPassword.isNotBlank()) {
+                        scope.launch {
+                             isLoading = true
+                             try {
+                                 Supabase.client.auth.signUpWith(Email) {
+                                     this.email = cleanEmail
+                                     this.password = cleanPassword
+                                 }
+                                 
+                                 val currentUser = Supabase.client.auth.currentUserOrNull()
+                                 if (currentUser != null) {
+                                     val userData = mapOf(
+                                         "id" to currentUser.id,
+                                         "email" to cleanEmail,
+                                         "username" to cleanUsername,
+                                         "last_login" to java.time.format.DateTimeFormatter.ISO_INSTANT.format(java.time.Instant.now())
+                                     )
+                                     
+                                     Supabase.client.from("users").insert(userData)
+                                     
+                                     saveEmail(context, cleanEmail)
+                                     Toast.makeText(context, "Akun berhasil dibuat!", Toast.LENGTH_SHORT).show()
+                                     navController.navigate("home") { popUpTo(0) }
+                                 } else {
+                                     Toast.makeText(context, "Cek email untuk konfirmasi!", Toast.LENGTH_LONG).show()
+                                     navController.navigate("login")
+                                 }
+                             } catch (e: Exception) {
+                                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                             } finally {
+                                 isLoading = false
+                             }
+                        }
                     } else {
-                        Toast.makeText(context, "Mohon lengkapi semua data", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Mohon lengkapi data", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = MaterialTheme.shapes.medium,
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = SeedGreen,
                     contentColor = Color.White
                 )
             ) {
-                Text(
-                    text = "Create Account",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text(
+                        text = "Buat Akun",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             TextButton(onClick = { navController.navigate("login") }) {
                 Text(
-                    text = "Already have an account? Login",
+                    text = "Sudah punya akun? Login",
                     color = SeedGreen
                 )
             }

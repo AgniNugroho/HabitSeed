@@ -34,22 +34,33 @@ fun HomePage(
                 .fillMaxSize()
                 .padding(24.dp)
         ) {
-            // Header
             HeaderSection(userName, onLogout)
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            // Dashboard / Stats
-            val completedCount = habits.count { it.isCompleted }
-            val totalCount = habits.size
+            
+            // Filter habits for today only
+            val todayHabits = habits.filter { habit ->
+                habit.createdAt?.let {
+                    try {
+                        val instant = java.time.Instant.parse(it)
+                        val habitDate = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        habitDate == java.time.LocalDate.now()
+                    } catch (e: Exception) {
+                        false
+                    }
+                } ?: false
+            }
+            
+            val completedCount = todayHabits.count { it.isCompleted }
+            val totalCount = todayHabits.size
             val progress = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
             
             val motivation = when {
-                totalCount == 0 -> "Habitmu masih kosong"
-                progress == 0f -> "Kamu belum memulai Habitmu. Ayo mulai!"
+                totalCount == 0 -> "Belum ada habit hari ini"
+                progress == 0f -> "Ayo selesaikan habit hari ini!"
                 progress < 0.5f -> "Awal yang baik, teruskan!"
                 progress < 1f -> "Hampir selesai, jangan putus asa!"
-                else -> "Habitmu sudah selesai!"
+                else -> "Semua habit hari ini selesai! 🎉"
             }
 
             Card(
@@ -67,7 +78,6 @@ fun HomePage(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Left: Progress Chart
                     Box(contentAlignment = Alignment.Center) {
                          CircularProgressBar(
                             percentage = progress,
@@ -80,7 +90,6 @@ fun HomePage(
 
                     Spacer(modifier = Modifier.width(20.dp))
 
-                    // Right: Motivation
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.Center
@@ -93,7 +102,7 @@ fun HomePage(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            motivation, // Dynamic text
+                            motivation,
                             style = MaterialTheme.typography.titleLarge,
                             color = LightPrimaryContent,
                             fontWeight = FontWeight.Bold,

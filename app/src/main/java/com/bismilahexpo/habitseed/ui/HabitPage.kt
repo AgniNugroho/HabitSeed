@@ -62,29 +62,81 @@ fun HabitPage(
                     )
                 }
             } else {
+                // Group habits by date
+                val groupedHabits = habits
+                    .sortedByDescending { it.createdAt }
+                    .groupBy { habit ->
+                        habit.createdAt?.let { 
+                            try {
+                                val instant = java.time.Instant.parse(it)
+                                val localDate = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                                localDate
+                            } catch (e: Exception) {
+                                java.time.LocalDate.now()
+                            }
+                        } ?: java.time.LocalDate.now()
+                    }
+                
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(habits) { habit ->
-                        HabitCard(
-                            habit = habit, 
-                            onToggle = { 
-                                if (!habit.isCompleted) {
-                                    selectedHabitForEvidence = habit
-                                    showEvidenceDialog = true
-                                } else {
-                                    // Just toggle off (remove evidence)
-                                    onToggleHabit(habit.copy(isCompleted = false, evidenceUri = null))
-                                }
+                    groupedHabits.forEach { (date, habitsForDate) ->
+                        // Date header
+                        item {
+                            val today = java.time.LocalDate.now()
+                            val dateText = when {
+                                date == today -> "Hari Ini"
+                                date == today.minusDays(1) -> "Kemarin"
+                                date.year == today.year -> date.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale("id", "ID")))
+                                else -> date.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("id", "ID")))
                             }
-                        )
+                            
+                            val completedCount = habitsForDate.count { it.isCompleted }
+                            val totalCount = habitsForDate.size
+                            
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = dateText,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = LightPrimaryContent,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "$completedCount/$totalCount selesai",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (completedCount == totalCount) SeedGreen else LightSecondaryContent,
+                                        fontWeight = if (completedCount == totalCount) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                        
+                        // Habits for this date
+                        items(habitsForDate) { habit ->
+                            HabitCard(
+                                habit = habit, 
+                                onToggle = { 
+                                    if (!habit.isCompleted) {
+                                        selectedHabitForEvidence = habit
+                                        showEvidenceDialog = true
+                                    } else {
+                                        onToggleHabit(habit.copy(isCompleted = false, evidenceUri = null))
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // FAB
         FloatingActionButton(
             onClick = { showAddDialog = true },
             modifier = Modifier
@@ -177,7 +229,7 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
                     containerColor = SeedGreen,
                     contentColor = Color.White
                 ),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text("Selesaikan")
