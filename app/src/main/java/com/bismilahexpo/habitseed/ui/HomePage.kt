@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bismilahexpo.habitseed.model.Habit
+import com.bismilahexpo.habitseed.model.Challenge
 import com.bismilahexpo.habitseed.ui.components.CircularProgressBar
 import com.bismilahexpo.habitseed.ui.theme.*
 
@@ -22,7 +23,11 @@ import com.bismilahexpo.habitseed.ui.theme.*
 fun HomePage(
     userName: String,
     habits: List<Habit>,
-    onLogout: () -> Unit
+    currentChallenge: Challenge?,
+    isChallengeTaken: Boolean,
+    isChallengeCompleted: Boolean,
+    onLogout: () -> Unit,
+    onTakeChallenge: (Challenge) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -110,6 +115,102 @@ fun HomePage(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Challenge Card Section
+            if (currentChallenge != null) {
+                Text(
+                    "Tantangan Hari Ini",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = LightPrimaryContent,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ChallengeCard(
+                    challenge = currentChallenge,
+                    isTaken = isChallengeTaken,
+                    isCompleted = isChallengeCompleted,
+                    onTake = { onTakeChallenge(currentChallenge) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ChallengeCard(
+    challenge: Challenge,
+    isTaken: Boolean,
+    isCompleted: Boolean,
+    onTake: () -> Unit
+) {
+    val icon = when(challenge.iconType) {
+        "fitness" -> "👟"
+        "water" -> "💧"
+        "book" -> "📚"
+        "social" -> "🤝"
+        else -> "🔥"
+    }
+
+    val cardColor = when {
+        isCompleted -> Color(0xFFE8F5E9)
+        isTaken -> Color(0xFFFFF3E0) // Light Orange for taken
+        else -> SeedGreen
+    }
+
+    val contentColor = if (isCompleted || isTaken) SeedGreen else Color.White
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    icon,
+                    fontSize = 24.sp
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    challenge.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = contentColor,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                challenge.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = contentColor.copy(alpha = 0.8f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { if (!isTaken) onTake() },
+                enabled = !isTaken && !isCompleted,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isTaken || isCompleted) Color.Transparent else Color.White,
+                    disabledContainerColor = Color.Transparent
+                ),
+                shape = RoundedCornerShape(12.dp),
+                border = if (isTaken || isCompleted) androidx.compose.foundation.BorderStroke(1.dp, contentColor) else null
+            ) {
+                Text(
+                    when {
+                        isCompleted -> "Tantangan Selesai ✨"
+                        isTaken -> "Tantangan Diambil 📝"
+                        else -> "Ambil Tantangan"
+                    },
+                    color = if (isTaken || isCompleted) contentColor else SeedGreen,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

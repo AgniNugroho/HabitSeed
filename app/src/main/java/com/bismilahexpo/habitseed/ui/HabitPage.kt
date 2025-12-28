@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bismilahexpo.habitseed.model.Habit
 import com.bismilahexpo.habitseed.ui.theme.*
@@ -196,6 +197,7 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
              if (habit.isCompleted && habit.evidenceUri != null) {
@@ -211,16 +213,38 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
              }
              
              Column {
-                Text(
-                    text = habit.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = LightPrimaryContent,
-                    fontWeight = FontWeight.SemiBold
-                )
+                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = habit.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = LightPrimaryContent,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (habit.isChallenge) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = SeedGreen.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "Tantangan",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SeedGreen,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                 }
                 Text(
                     text = habit.goal,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LightSecondaryContent
+                    color = LightSecondaryContent,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

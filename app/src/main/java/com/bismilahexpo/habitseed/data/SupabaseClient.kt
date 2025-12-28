@@ -18,6 +18,7 @@ object Supabase {
         install(Auth)
         install(Postgrest)
         install(Realtime)
+        install(io.github.jan.supabase.storage.Storage)
         
         defaultSerializer = KotlinXSerializer(Json {
             ignoreUnknownKeys = true

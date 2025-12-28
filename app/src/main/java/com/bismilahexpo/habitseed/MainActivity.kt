@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.bismilahexpo.habitseed.model.Habit
+import com.bismilahexpo.habitseed.model.Challenge
+import com.bismilahexpo.habitseed.model.UserChallenge
 import com.bismilahexpo.habitseed.ui.HabitPage
 import com.bismilahexpo.habitseed.ui.theme.SeedGreen
 import com.bismilahexpo.habitseed.ui.theme.HabitSeedTheme
@@ -48,6 +50,10 @@ import com.bismilahexpo.habitseed.data.Supabase
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.storage.storage
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -78,6 +84,9 @@ fun AppNavigation(intent: Intent) {
     var habits by remember { mutableStateOf(listOf<Habit>()) }
     var userName by remember { mutableStateOf("User") }
     var user by remember { mutableStateOf(Supabase.client.auth.currentUserOrNull()) }
+    var currentChallenge by remember { mutableStateOf<Challenge?>(null) }
+    var isChallengeTaken by remember { mutableStateOf(false) }
+    var isChallengeCompleted by remember { mutableStateOf(false) }
     
     val localScope = androidx.compose.runtime.rememberCoroutineScope()
     val context = LocalContext.current
@@ -124,6 +133,40 @@ fun AppNavigation(intent: Intent) {
                 android.util.Log.e("MainActivity", "Error fetching habits", e)
                 e.printStackTrace()
             }
+
+            // Fetch Daily Challenge
+            try {
+                val challenges = Supabase.client.from("challenges").select().decodeList<Challenge>()
+                if (challenges.isNotEmpty()) {
+                    // Pick a challenge based on current day of year
+                    val dayOfYear = java.time.LocalDate.now().dayOfYear
+                    currentChallenge = challenges[dayOfYear % challenges.size]
+                    
+                    // Check if completed today
+                    val completion = Supabase.client.from("user_challenges").select {
+                        filter {
+                            eq("user_id", currentUser.id)
+                            eq("challenge_id", currentChallenge!!.id!!)
+                            eq("completed_at", java.time.LocalDate.now().toString())
+                        }
+                    }.decodeSingleOrNull<UserChallenge>()
+                    
+                    isChallengeCompleted = completion != null
+                    
+                    // Check if taken today (exists in habits table as is_challenge = true)
+                    isChallengeTaken = habits.any { 
+                        it.isChallenge && it.createdAt?.let { date ->
+                            try {
+                                val instant = java.time.Instant.parse(date)
+                                val habitDate = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                                habitDate == java.time.LocalDate.now()
+                            } catch (e: Exception) { false }
+                        } ?: false
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error fetching challenges", e)
+            }
         } else {
             habits = emptyList()
             userName = "?"
@@ -151,11 +194,44 @@ fun AppNavigation(intent: Intent) {
                     HomePage(
                         userName = userName,
                         habits = habits,
-                         onLogout = {
+                        currentChallenge = currentChallenge,
+                        isChallengeTaken = isChallengeTaken,
+                        isChallengeCompleted = isChallengeCompleted,
+                        onLogout = {
                              localScope.launch {
                                  Supabase.client.auth.signOut()
-                                 navController.navigate("login") { popUpTo(0) }
                              }
+                        },
+                        onTakeChallenge = { challenge ->
+                            localScope.launch {
+                                try {
+                                    val currentUser = Supabase.client.auth.currentUserOrNull()
+                                    if (currentUser != null) {
+                                        // ONLY add to habits table as a challenge habit (NOT completed yet)
+                                        val habitData = buildJsonObject {
+                                            put("user_id", JsonPrimitive(currentUser.id))
+                                            put("name", JsonPrimitive(challenge.title))
+                                            put("goal", JsonPrimitive(challenge.description))
+                                            put("is_completed", JsonPrimitive(false))
+                                            put("is_challenge", JsonPrimitive(true))
+                                            put("created_at", JsonPrimitive(java.time.Instant.now().toString()))
+                                        }
+                                        Supabase.client.from("habits").insert(habitData)
+                                        
+                                        isChallengeTaken = true
+                                        
+                                        // Refresh habits
+                                        habits = Supabase.client.from("habits").select { 
+                                            filter { eq("user_id", currentUser.id) }
+                                        }.decodeList()
+                                        
+                                        Toast.makeText(context, "Tantangan diambil! Cek daftar habit-mu �", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("MainActivity", "Error taking challenge", e)
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
                         }
                     )
                 }
@@ -166,24 +242,66 @@ fun AppNavigation(intent: Intent) {
                             localScope.launch {
                                 try {
                                     if (updatedHabit.id != null) {
-                                        Supabase.client.from("habits").update(
-                                            {
-                                                set("is_completed", updatedHabit.isCompleted)
-                                                set("evidence_uri", updatedHabit.evidenceUri)
+                                        var finalEvidenceUri = updatedHabit.evidenceUri
+                                        
+                                        // If evidence is a local URI, upload it to storage
+                                        if (finalEvidenceUri != null && (finalEvidenceUri.startsWith("content://") || finalEvidenceUri.startsWith("file://"))) {
+                                            try {
+                                                val uri = android.net.Uri.parse(finalEvidenceUri)
+                                                val inputStream = context.contentResolver.openInputStream(uri)
+                                                val bytes = inputStream?.readBytes()
+                                                if (bytes != null) {
+                                                    val fileName = "${System.currentTimeMillis()}.jpg"
+                                                    val bucket = Supabase.client.storage.from("habit-evidence")
+                                                    bucket.upload(fileName, bytes)
+                                                    finalEvidenceUri = bucket.publicUrl(fileName)
+                                                }
+                                                inputStream?.close()
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("MainActivity", "Error uploading image", e)
                                             }
-                                        ) {
+                                        }
+
+                                        val jsonString = """
+                                            {
+                                                "is_completed": ${updatedHabit.isCompleted},
+                                                "evidence_uri": ${if (finalEvidenceUri != null) "\"$finalEvidenceUri\"" else "null"}
+                                            }
+                                        """.trimIndent()
+                                        val updateData = kotlinx.serialization.json.Json.parseToJsonElement(jsonString)
+
+                                        Supabase.client.from("habits").update(updateData) {
                                             filter { eq("id", updatedHabit.id) }
                                         }
 
+                                        // SYNC CHALLENGE COMPLETION
+                                        if (updatedHabit.isChallenge && updatedHabit.isCompleted) {
+                                            try {
+                                                val currUser = Supabase.client.auth.currentUserOrNull()
+                                                val currChall = currentChallenge
+                                                if (currUser != null && currChall != null) {
+                                                    val challJson = """
+                                                        {
+                                                            "user_id": "${currUser.id}",
+                                                            "challenge_id": "${currChall.id}",
+                                                            "completed_at": "${java.time.LocalDate.now()}"
+                                                        }
+                                                    """.trimIndent()
+                                                    val challData = kotlinx.serialization.json.Json.parseToJsonElement(challJson)
+                                                    Supabase.client.from("user_challenges").insert(challData)
+                                                    isChallengeCompleted = true
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("MainActivity", "Error syncing user_challenges", e)
+                                            }
+                                        }
+                                        
+                                        // Refresh habits
                                         val currentUser = Supabase.client.auth.currentUserOrNull()
                                         if (currentUser != null) {
-                                            try {
-                                                habits = Supabase.client.from("habits").select { 
-                                                    filter { eq("user_id", currentUser.id) }
-                                                }.decodeList()
-                                            } catch(refreshError: Exception) {
-                                                android.util.Log.e("MainActivity", "Error refreshing habits", refreshError)
-                                            }
+                                            habits = Supabase.client.from("habits").select { 
+                                                filter { eq("user_id", currentUser.id) }
+                                            }.decodeList()
                                         }
                                     }
                                 } catch(e: Exception) {
