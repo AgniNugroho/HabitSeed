@@ -30,14 +30,16 @@ fun EvidenceUploadDialog(
     onEvidenceSelected: (Uri) -> Unit
 ) {
     val context = LocalContext.current
-    var tempUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var tempUriString by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Helper to create a temp file and URI
     fun createTempPictureUri(): Uri {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val imageFileName = "JPEG_" + timeStamp + "_"
+        val imageFileName = "avatar_$timeStamp"
         val storageDir = context.cacheDir
-        val file = File.createTempFile(imageFileName, ".jpg", storageDir)
+        val file = File(storageDir, "$imageFileName.jpg")
+        if (file.exists()) file.delete()
+        file.createNewFile()
 
         return FileProvider.getUriForFile(
              context,
@@ -49,9 +51,9 @@ fun EvidenceUploadDialog(
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
-        val uri = tempUri
-        if (success && uri != null) {
-            onEvidenceSelected(uri)
+        val uriStr = tempUriString
+        if (success && uriStr != null) {
+            onEvidenceSelected(Uri.parse(uriStr))
         }
     }
 
@@ -65,27 +67,29 @@ fun EvidenceUploadDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Upload Bukti Habit") },
+        title = { Text("Upload Foto") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Untuk menyelesaikan habit ini, mohon lampirkan foto bukti.")
-                
+            ) {           
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Button(
                         onClick = { 
-                            try {
-                                val uri = createTempPictureUri()
-                                tempUri = uri
-                                cameraLauncher.launch(uri)
-                            } catch (e: Exception) {
-                                android.util.Log.e("EvidenceUpload", "Failed to launch camera", e)
-                                Toast.makeText(context, "Tidak dapat membuka kamera: ${e.message}", Toast.LENGTH_LONG).show()
+                            if (context.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                Toast.makeText(context, "Izin kamera diperlukan", Toast.LENGTH_SHORT).show()
+                                // In a real app, you'd request permission here
+                            } else {
+                                try {
+                                    val uri = createTempPictureUri()
+                                    tempUriString = uri.toString()
+                                    cameraLauncher.launch(uri)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Tidak dapat membuka kamera: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SeedGreen),

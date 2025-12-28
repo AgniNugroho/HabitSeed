@@ -42,6 +42,7 @@ fun HomePage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 24.dp)
                 .verticalScroll(scrollState)
         ) {

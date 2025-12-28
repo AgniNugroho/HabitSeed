@@ -41,6 +41,7 @@ fun HabitPage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(24.dp)
         ) {
             Text(
@@ -304,7 +305,7 @@ fun AddHabitDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
                 OutlinedTextField(
                     value = goal,
                     onValueChange = { goal = it },
-                    label = { Text("Target Habit") },
+                    label = { Text("Deskripsi Habit") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = LightPrimaryContent,

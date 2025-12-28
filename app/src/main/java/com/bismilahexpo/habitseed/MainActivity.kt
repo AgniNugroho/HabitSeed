@@ -1,4 +1,3 @@
-
 package com.bismilahexpo.habitseed
 
 import android.content.Context
@@ -8,57 +7,62 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Alignment
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import com.bismilahexpo.habitseed.ui.HomePage
-import com.bismilahexpo.habitseed.ui.LoginPage
-import com.bismilahexpo.habitseed.ui.RegisterPage
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.bismilahexpo.habitseed.model.Habit
-import com.bismilahexpo.habitseed.model.Challenge
-import com.bismilahexpo.habitseed.model.UserChallenge
-import com.bismilahexpo.habitseed.ui.HabitPage
-import com.bismilahexpo.habitseed.ui.theme.SeedGreen
-import com.bismilahexpo.habitseed.ui.theme.HabitSeedTheme
+import androidx.navigation.compose.rememberNavController
 import com.bismilahexpo.habitseed.data.Supabase
+import com.bismilahexpo.habitseed.data.StorageHelper
+import com.bismilahexpo.habitseed.model.Challenge
+import com.bismilahexpo.habitseed.model.Habit
+import com.bismilahexpo.habitseed.model.UserChallenge
+import com.bismilahexpo.habitseed.ui.EditProfilePage
+import com.bismilahexpo.habitseed.ui.HabitGalleryPage
+import com.bismilahexpo.habitseed.ui.HabitPage
+import com.bismilahexpo.habitseed.ui.HomePage
+import com.bismilahexpo.habitseed.ui.LoginPage
+import com.bismilahexpo.habitseed.ui.ProfilePage
+import com.bismilahexpo.habitseed.ui.RegisterPage
+import com.bismilahexpo.habitseed.ui.SettingsPage
+import com.bismilahexpo.habitseed.ui.theme.HabitSeedTheme
+import com.bismilahexpo.habitseed.ui.theme.SeedGreen
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.storage.storage
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class MainActivity : ComponentActivity() {
-
     private var currentIntent by mutableStateOf<Intent?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,23 +85,32 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation(intent: Intent) {
     val navController = rememberNavController()
+    var isAuthLoading by remember { mutableStateOf(true) }
     var habits by remember { mutableStateOf(listOf<Habit>()) }
-    var userName by remember { mutableStateOf("User") }
-    var user by remember { mutableStateOf(Supabase.client.auth.currentUserOrNull()) }
+    var userName by rememberSaveable { mutableStateOf("User") }
+    var userAvatarUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var user by remember { mutableStateOf<io.github.jan.supabase.auth.user.UserInfo?>(null) }
     var currentChallenge by remember { mutableStateOf<Challenge?>(null) }
     var isChallengeTaken by remember { mutableStateOf(false) }
     var isChallengeCompleted by remember { mutableStateOf(false) }
     
-    val localScope = androidx.compose.runtime.rememberCoroutineScope()
+    val localScope = rememberCoroutineScope()
     val context = LocalContext.current
-    val startDestination = if (user != null) "home" else "login"
     
     LaunchedEffect(Unit) {
         Supabase.client.auth.sessionStatus.collectLatest { status ->
-             if (status is SessionStatus.Authenticated) {
-                 user = Supabase.client.auth.currentUserOrNull()
-             } else {
-                 user = null
+             when (status) {
+                 is SessionStatus.Authenticated -> {
+                     user = Supabase.client.auth.currentUserOrNull()
+                     isAuthLoading = false
+                 }
+                 is SessionStatus.NotAuthenticated -> {
+                     user = null
+                     isAuthLoading = false
+                 }
+                 else -> {
+                     isAuthLoading = true
+                 }
              }
         }
     }
@@ -107,21 +120,19 @@ fun AppNavigation(intent: Intent) {
         if (currentUser != null) {
             try {
                  val result = Supabase.client.from("users").select {
-                     filter {
-                         eq("id", currentUser.id)
-                     }
+                     filter { eq("id", currentUser.id) }
                  }.decodeSingleOrNull<Map<String, String>>()
                  
                  if (result != null) {
                      userName = result["username"] ?: "User"
-                     Toast.makeText(context, "Berhasil Login!", Toast.LENGTH_SHORT).show()
+                     userAvatarUrl = result["avatar_url"]
                  } else {
                      userName = "User"
-                     Toast.makeText(context, "Data user tidak ditemukan di database", Toast.LENGTH_LONG).show()
+                     userAvatarUrl = null
                  }
             } catch (e: Exception) {
                 userName = "User"
-                Toast.makeText(context, "Error load username: ${e.message}", Toast.LENGTH_LONG).show()
+                userAvatarUrl = null
                 e.printStackTrace()
             }
             
@@ -130,19 +141,15 @@ fun AppNavigation(intent: Intent) {
                     filter { eq("user_id", currentUser.id) }
                 }.decodeList()
             } catch(e: Exception) { 
-                android.util.Log.e("MainActivity", "Error fetching habits", e)
                 e.printStackTrace()
             }
 
-            // Fetch Daily Challenge
             try {
                 val challenges = Supabase.client.from("challenges").select().decodeList<Challenge>()
                 if (challenges.isNotEmpty()) {
-                    // Pick a challenge based on current day of year
                     val dayOfYear = java.time.LocalDate.now().dayOfYear
                     currentChallenge = challenges[dayOfYear % challenges.size]
                     
-                    // Check if completed today
                     val completion = Supabase.client.from("user_challenges").select {
                         filter {
                             eq("user_id", currentUser.id)
@@ -153,7 +160,6 @@ fun AppNavigation(intent: Intent) {
                     
                     isChallengeCompleted = completion != null
                     
-                    // Check if taken today (exists in habits table as is_challenge = true)
                     isChallengeTaken = habits.any { 
                         it.isChallenge && it.createdAt?.let { date ->
                             try {
@@ -173,23 +179,24 @@ fun AppNavigation(intent: Intent) {
         }
     }
 
+    if (isAuthLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.CircularProgressIndicator(color = SeedGreen)
+        }
+        return
+    }
+
+    val startDestination = if (user != null) "home" else "login"
+
     Scaffold { innerPadding ->
-        Box(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController, 
                 startDestination = startDestination,
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable("login") {
-                    LoginPage(navController = navController)
-                }
-                composable("register") {
-                    RegisterPage(navController = navController)
-                }
+                composable("login") { LoginPage(navController = navController) }
+                composable("register") { RegisterPage(navController = navController) }
                 composable("home") {
                     HomePage(
                         userName = userName,
@@ -197,17 +204,12 @@ fun AppNavigation(intent: Intent) {
                         currentChallenge = currentChallenge,
                         isChallengeTaken = isChallengeTaken,
                         isChallengeCompleted = isChallengeCompleted,
-                        onLogout = {
-                             localScope.launch {
-                                 Supabase.client.auth.signOut()
-                             }
-                        },
+                        onLogout = { localScope.launch { Supabase.client.auth.signOut() } },
                         onTakeChallenge = { challenge ->
                             localScope.launch {
                                 try {
                                     val currentUser = Supabase.client.auth.currentUserOrNull()
                                     if (currentUser != null) {
-                                        // ONLY add to habits table as a challenge habit (NOT completed yet)
                                         val habitData = buildJsonObject {
                                             put("user_id", JsonPrimitive(currentUser.id))
                                             put("name", JsonPrimitive(challenge.title))
@@ -217,18 +219,13 @@ fun AppNavigation(intent: Intent) {
                                             put("created_at", JsonPrimitive(java.time.Instant.now().toString()))
                                         }
                                         Supabase.client.from("habits").insert(habitData)
-                                        
                                         isChallengeTaken = true
-                                        
-                                        // Refresh habits
                                         habits = Supabase.client.from("habits").select { 
                                             filter { eq("user_id", currentUser.id) }
                                         }.decodeList()
-                                        
-                                        Toast.makeText(context, "Tantangan diambil! Cek daftar habit-mu �", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Tantangan diambil!", Toast.LENGTH_SHORT).show()
                                     }
                                 } catch (e: Exception) {
-                                    android.util.Log.e("MainActivity", "Error taking challenge", e)
                                     Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                                 }
                             }
@@ -245,44 +242,42 @@ fun AppNavigation(intent: Intent) {
                                         var finalEvidenceUri = updatedHabit.evidenceUri
                                         
                                         if (finalEvidenceUri != null && (finalEvidenceUri.startsWith("content://") || finalEvidenceUri.startsWith("file://"))) {
-                                            try {
-                                                val uri = android.net.Uri.parse(finalEvidenceUri)
-                                                val inputStream = context.contentResolver.openInputStream(uri)
-                                                val bytes = inputStream?.readBytes()
-                                                if (bytes != null) {
-                                                    val fileName = "${System.currentTimeMillis()}.jpg"
-                                                    val bucket = Supabase.client.storage.from("habit-evidence")
-                                                    
-                                                    bucket.upload(fileName, bytes)
-                                                    
-                                                    finalEvidenceUri = bucket.publicUrl(fileName)
-                                                } else {
+                                            StorageHelper.uploadFile(
+                                                context = context,
+                                                bucketName = "habit-evidence",
+                                                uri = android.net.Uri.parse(finalEvidenceUri),
+                                                onSuccess = { publicUrl ->
+                                                    localScope.launch {
+                                                        val updateData = buildJsonObject {
+                                                            put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
+                                                            put("evidence_uri", JsonPrimitive(publicUrl))
+                                                        }
+                                                        Supabase.client.from("habits").update(updateData) {
+                                                            filter { eq("id", updatedHabit.id) }
+                                                        }
+                                                        // Refresh
+                                                        val currentUser = user
+                                                        if (currentUser != null) {
+                                                            habits = Supabase.client.from("habits").select { 
+                                                                filter { eq("user_id", currentUser.id) }
+                                                            }.decodeList()
+                                                        }
+                                                    }
                                                 }
-                                                inputStream?.close()
-                                            } catch (e: Exception) {
-                                                localScope.launch {
-                                                    Toast.makeText(context, "Gagal upload: ${e.message}", Toast.LENGTH_LONG).show()
-                                                }
-                                            }
+                                            )
+                                            // Handle sync completion locally if needed, or wait for refresh
+                                        } else {
+                                             val updateData = buildJsonObject {
+                                                 put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
+                                             }
+                                             Supabase.client.from("habits").update(updateData) {
+                                                 filter { eq("id", updatedHabit.id) }
+                                             }
                                         }
 
-                                        val updateData = buildJsonObject {
-                                            put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
-                                            if (finalEvidenceUri != null) {
-                                                put("evidence_uri", JsonPrimitive(finalEvidenceUri))
-                                            } else {
-                                                put("evidence_uri", JsonPrimitive(null as String?))
-                                            }
-                                        }
-
-                                        Supabase.client.from("habits").update(updateData) {
-                                            filter { eq("id", updatedHabit.id) }
-                                        }
-
-                                        // SYNC CHALLENGE COMPLETION
                                         if (updatedHabit.isChallenge && updatedHabit.isCompleted) {
                                             try {
-                                                val currUser = Supabase.client.auth.currentUserOrNull()
+                                                val currUser = user
                                                 val currChall = currentChallenge
                                                 if (currUser != null && currChall != null) {
                                                     val challData = buildJsonObject {
@@ -293,12 +288,10 @@ fun AppNavigation(intent: Intent) {
                                                     Supabase.client.from("user_challenges").insert(challData)
                                                     isChallengeCompleted = true
                                                 }
-                                            } catch (e: Exception) {
-                                            }
+                                            } catch (e: Exception) { e.printStackTrace() }
                                         }
                                         
-                                        // Refresh habits
-                                        val currentUser = Supabase.client.auth.currentUserOrNull()
+                                        val currentUser = user
                                         if (currentUser != null) {
                                             habits = Supabase.client.from("habits").select { 
                                                 filter { eq("user_id", currentUser.id) }
@@ -312,96 +305,175 @@ fun AppNavigation(intent: Intent) {
                         },
                         onAddHabit = { name, goal ->
                             localScope.launch {
-                                val currentUser = Supabase.client.auth.currentUserOrNull()
+                                val currentUser = user
                                 if (currentUser != null) {
-                                     val habitData = kotlinx.serialization.json.buildJsonObject {
-                                         put("user_id", kotlinx.serialization.json.JsonPrimitive(currentUser.id))
-                                         put("name", kotlinx.serialization.json.JsonPrimitive(name))
-                                         put("goal", kotlinx.serialization.json.JsonPrimitive(goal))
-                                         put("is_completed", kotlinx.serialization.json.JsonPrimitive(false))
+                                     val habitData = buildJsonObject {
+                                         put("user_id", JsonPrimitive(currentUser.id))
+                                         put("name", JsonPrimitive(name))
+                                         put("goal", JsonPrimitive(goal))
+                                         put("is_completed", JsonPrimitive(false))
                                      }
-                                     
                                      try {
                                          Supabase.client.from("habits").insert(habitData)
                                          Toast.makeText(context, "Habit ditanam!", Toast.LENGTH_SHORT).show()
-                                         
-                                         try {
-                                             habits = Supabase.client.from("habits").select { 
-                                                 filter { eq("user_id", currentUser.id) }
-                                             }.decodeList()
-                                         } catch(refreshError: Exception) {
-                                             android.util.Log.e("MainActivity", "Error refreshing habits", refreshError)
-                                         }
+                                         habits = Supabase.client.from("habits").select { 
+                                             filter { eq("user_id", currentUser.id) }
+                                         }.decodeList()
                                      } catch(e: Exception) {
                                          Toast.makeText(context, "Gagal: ${e.message}", Toast.LENGTH_LONG).show()
-                                         e.printStackTrace()
                                      }
-                                } else {
-                                    Toast.makeText(context, "Silakan login ulang", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
                     )
                 }
+                composable("profile") {
+                    ProfilePage(
+                        userName = userName,
+                        userEmail = user?.email ?: "",
+                        userAvatarUrl = userAvatarUrl,
+                        onEditProfile = { navController.navigate("edit_profile") },
+                        onGalleryClick = { navController.navigate("gallery") },
+                        onSettingsClick = { navController.navigate("settings") },
+                        onLogout = { localScope.launch { Supabase.client.auth.signOut() } }
+                    )
+                }
+                composable("gallery") {
+                    HabitGalleryPage(
+                        habits = habits,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable("edit_profile") {
+                    EditProfilePage(
+                        currentUserName = userName,
+                        currentUserAvatarUrl = userAvatarUrl,
+                        onBack = { navController.popBackStack() },
+                        onSave = { newName ->
+                            localScope.launch {
+                                try {
+                                    val currentUser = user
+                                    if (currentUser != null) {
+                                        val updateData = buildJsonObject { put("username", JsonPrimitive(newName)) }
+                                        Supabase.client.from("users").update(updateData) {
+                                            filter { eq("id", currentUser.id) }
+                                        }
+                                        userName = newName
+                                        Toast.makeText(context, "Profil diperbarui!", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Gagal update: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        onSaveAvatar = { avatarUri ->
+                            localScope.launch {
+                                try {
+                                    val currentUser = user
+                                    if (currentUser != null) {
+                                         StorageHelper.uploadFile(
+                                             context = context,
+                                             bucketName = "avatars",
+                                             uri = android.net.Uri.parse(avatarUri),
+                                             onSuccess = { publicUrl ->
+                                                 localScope.launch {
+                                                     val updateData = buildJsonObject {
+                                                         put("avatar_url", JsonPrimitive(publicUrl))
+                                                     }
+                                                     Supabase.client.from("users").update(updateData) {
+                                                         filter { eq("id", currentUser.id) }
+                                                     }
+                                                     userAvatarUrl = publicUrl
+                                                     Toast.makeText(context, "Foto profil diperbarui!", Toast.LENGTH_SHORT).show()
+                                                 }
+                                             }
+                                         )
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Gagal update foto: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    )
+                }
+                composable("settings") { SettingsPage(onBack = { navController.popBackStack() }) }
             }
 
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
             
-            if (currentRoute == "home" || currentRoute == "habits") {
+            if (currentRoute == "home" || currentRoute == "habits" || currentRoute == "profile") {
                 androidx.compose.material3.Card(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
                     elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 8.dp),
                     colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color.White)
                 ) {
-                     NavigationBar(
-                         containerColor = Color.Transparent, 
-                         contentColor = SeedGreen,
-                         modifier = Modifier.padding(horizontal = 8.dp).height(64.dp),
-                         windowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp)
-                     ) {
-                         NavigationBarItem(
-                             icon = { Icon(androidx.compose.material.icons.Icons.Default.Home, contentDescription = "Home") },
-                             label = { Text("Dasbor") },
-                             selected = currentRoute == "home",
-                             onClick = {
-                                 navController.navigate("home") {
-                                     popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                     launchSingleTop = true
-                                     restoreState = true
-                                 }
-                             },
-                             colors = NavigationBarItemDefaults.colors(
-                                 selectedIconColor = SeedGreen,
-                                 selectedTextColor = SeedGreen,
-                                 indicatorColor = SeedGreen.copy(alpha = 0.1f),
-                                 unselectedIconColor = Color.LightGray,
-                                 unselectedTextColor = Color.LightGray
-                             )
-                         )
-                         NavigationBarItem(
-                             icon = { Icon(androidx.compose.material.icons.Icons.Default.List, contentDescription = "Habits") },
-                             label = { Text("Habit") },
-                             selected = currentRoute == "habits",
-                             onClick = {
-                                 navController.navigate("habits") {
-                                     popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                     launchSingleTop = true
-                                     restoreState = true
-                                 }
-                             },
-                             colors = NavigationBarItemDefaults.colors(
-                                 selectedIconColor = SeedGreen,
-                                 selectedTextColor = SeedGreen,
-                                 indicatorColor = SeedGreen.copy(alpha = 0.1f),
-                                 unselectedIconColor = Color.LightGray,
-                                 unselectedTextColor = Color.LightGray
-                             )
-                         )
-                     }
+                    NavigationBar(
+                        containerColor = Color.Transparent, 
+                        contentColor = SeedGreen,
+                        modifier = Modifier.padding(horizontal = 8.dp).height(64.dp),
+                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp)
+                    ) {
+                        NavigationBarItem(
+                            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                            label = { Text("Dasbor") },
+                            selected = currentRoute == "home",
+                            onClick = {
+                                navController.navigate("home") {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = SeedGreen,
+                                selectedTextColor = SeedGreen,
+                                indicatorColor = SeedGreen.copy(alpha = 0.1f),
+                                unselectedIconColor = Color.LightGray,
+                                unselectedTextColor = Color.LightGray
+                            )
+                        )
+                        NavigationBarItem(
+                            icon = { Icon(Icons.Default.List, contentDescription = "Habits") },
+                            label = { Text("Habit") },
+                            selected = currentRoute == "habits",
+                            onClick = {
+                                navController.navigate("habits") {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = SeedGreen,
+                                selectedTextColor = SeedGreen,
+                                indicatorColor = SeedGreen.copy(alpha = 0.1f),
+                                unselectedIconColor = Color.LightGray,
+                                unselectedTextColor = Color.LightGray
+                            )
+                        )
+                        NavigationBarItem(
+                            icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+                            label = { Text("Profil") },
+                            selected = currentRoute == "profile",
+                            onClick = {
+                                navController.navigate("profile") {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = SeedGreen,
+                                selectedTextColor = SeedGreen,
+                                indicatorColor = SeedGreen.copy(alpha = 0.1f),
+                                unselectedIconColor = Color.LightGray,
+                                unselectedTextColor = Color.LightGray
+                            )
+                        )
+                    }
                 }
             }
         }

@@ -15,7 +15,11 @@ object Supabase {
         supabaseUrl = SUPABASE_URL,
         supabaseKey = SUPABASE_KEY
     ) {
-        install(Auth)
+        install(Auth) {
+            // Optional: You can provide a custom session manager here if needed,
+            // but for simple cases, default should work if it's persisting.
+            // On Android, explicitly setting up persistence is better.
+        }
         install(Postgrest)
         install(Realtime)
         install(io.github.jan.supabase.storage.Storage)
