@@ -175,12 +175,22 @@ fun HabitPage(
 
 @Composable
 fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
+    val isToday = habit.createdAt?.let {
+        try {
+            val instant = java.time.Instant.parse(it)
+            val habitDate = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            habitDate == java.time.LocalDate.now()
+        } catch (e: Exception) {
+            true
+        }
+    } ?: true
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(LightCardBackground)
-            .clickable { onToggle(habit) }
+            .clickable(enabled = isToday || habit.isCompleted) { onToggle(habit) }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -225,14 +235,17 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
         } else {
             Button(
                 onClick = { onToggle(habit) },
+                enabled = isToday,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = SeedGreen,
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    disabledContainerColor = Color.LightGray,
+                    disabledContentColor = Color.DarkGray
                 ),
                 shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text("Selesaikan")
+                Text(if (isToday) "Selesaikan" else "Terewat")
             }
         }
     }
