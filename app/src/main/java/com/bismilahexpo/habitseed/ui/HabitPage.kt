@@ -191,7 +191,7 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(LightCardBackground)
-            .clickable(enabled = isToday || habit.isCompleted) { onToggle(habit) }
+            .clickable(enabled = isToday && !habit.isCompleted) { onToggle(habit) }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
