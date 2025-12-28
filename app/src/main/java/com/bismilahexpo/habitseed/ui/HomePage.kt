@@ -1,5 +1,7 @@
 package com.bismilahexpo.habitseed.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.bismilahexpo.habitseed.model.Habit
 import com.bismilahexpo.habitseed.model.Challenge
 import com.bismilahexpo.habitseed.ui.components.CircularProgressBar
+import com.bismilahexpo.habitseed.ui.components.HabitCalendar
 import com.bismilahexpo.habitseed.ui.theme.*
 
 @Composable
@@ -29,6 +32,8 @@ fun HomePage(
     onLogout: () -> Unit,
     onTakeChallenge: (Challenge) -> Unit
 ) {
+    val scrollState = rememberScrollState()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -37,8 +42,10 @@ fun HomePage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
+                .padding(horizontal = 24.dp)
+                .verticalScroll(scrollState)
         ) {
+            Spacer(modifier = Modifier.height(24.dp))
             HeaderSection(userName, onLogout)
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -136,6 +143,10 @@ fun HomePage(
                     onTake = { onTakeChallenge(currentChallenge) }
                 )
             }
+
+            HabitCalendar(habits = habits)
+            
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 }
