@@ -270,7 +270,7 @@ fun HabitCard(habit: Habit, onToggle: (Habit) -> Unit) {
                 shape = RoundedCornerShape(24.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(if (isToday) "Selesaikan" else "Terewat")
+                Text(if (isToday) "Selesaikan" else "Terlewat")
             }
         }
     }
