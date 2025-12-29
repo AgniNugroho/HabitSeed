@@ -28,7 +28,7 @@ fun HabitCalendar(habits: List<Habit>, modifier: Modifier = Modifier) {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     
     val daysInMonth = currentMonth.lengthOfMonth()
-    val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7 // 0=Sunday, 1=Monday... (Adjusting for Sunday start)
+    val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7
     
     val habitsByDate = remember(habits) {
         habits.groupBy { habit ->
@@ -51,7 +51,6 @@ fun HabitCalendar(habits: List<Habit>, modifier: Modifier = Modifier) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -92,7 +91,6 @@ fun HabitCalendar(habits: List<Habit>, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Weekday labels
             Row(modifier = Modifier.fillMaxWidth()) {
                 val daysOfWeek = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
                 daysOfWeek.forEach { day ->
@@ -109,7 +107,6 @@ fun HabitCalendar(habits: List<Habit>, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Calendar Grid
             val totalCells = ((daysInMonth + firstDayOfMonth + 6) / 7) * 7
             Column {
                 for (row in 0 until totalCells / 7) {

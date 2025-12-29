@@ -139,6 +139,9 @@ fun RegisterPage(navController: NavController) {
                                  Supabase.client.auth.signUpWith(Email) {
                                      this.email = cleanEmail
                                      this.password = cleanPassword
+                                     data = buildJsonObject {
+                                         put("username", cleanUsername)
+                                     }
                                  }
                                  
                                  val currentUser = Supabase.client.auth.currentUserOrNull()

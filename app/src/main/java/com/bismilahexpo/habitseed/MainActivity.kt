@@ -127,7 +127,25 @@ fun AppNavigation(intent: Intent) {
                      userName = result["username"] ?: "User"
                      userAvatarUrl = result["avatar_url"]
                  } else {
-                     userName = "User"
+                     // Auto-repair missing user record
+                     val fallbackName = currentUser.email?.substringBefore("@") ?: "User"
+                     val metadataName = currentUser.userMetadata?.get("username")?.toString()?.replace("\"", "")
+                     val finalUsername = metadataName ?: fallbackName
+                     
+                     val userData = buildJsonObject {
+                         put("id", currentUser.id)
+                         put("email", currentUser.email ?: "")
+                         put("username", finalUsername)
+                         put("last_login", java.time.format.DateTimeFormatter.ISO_INSTANT.format(java.time.Instant.now()))
+                     }
+                     
+                     try {
+                         Supabase.client.from("users").insert(userData)
+                         userName = finalUsername
+                     } catch (e: Exception) {
+                         userName = "User"
+                         e.printStackTrace()
+                     }
                      userAvatarUrl = null
                  }
             } catch (e: Exception) {
