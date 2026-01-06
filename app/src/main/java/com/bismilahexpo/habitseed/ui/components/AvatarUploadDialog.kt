@@ -11,9 +11,8 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import android.widget.Toast
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -25,14 +24,14 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun EvidenceUploadDialog(
+fun AvatarUploadDialog(
     onDismiss: () -> Unit,
     onLaunchCamera: () -> Unit,
     onLaunchGallery: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Upload Bukti Habit") },
+        title = { Text("Ganti Foto Profil") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),

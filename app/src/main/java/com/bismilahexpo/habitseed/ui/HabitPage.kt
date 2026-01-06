@@ -1,5 +1,6 @@
 package com.bismilahexpo.habitseed.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import coil.compose.AsyncImage
@@ -13,7 +14,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -22,6 +25,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bismilahexpo.habitseed.model.Habit
 import com.bismilahexpo.habitseed.ui.theme.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import androidx.core.content.FileProvider
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun HabitPage(
@@ -30,8 +41,62 @@ fun HabitPage(
     onAddHabit: (String, String) -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
-    var selectedHabitForEvidence by remember { mutableStateOf<Habit?>(null) }
-    var showEvidenceDialog by remember { mutableStateOf(false) }
+    var selectedHabitIdForEvidence by rememberSaveable { mutableStateOf<String?>(null) }
+    var showEvidenceDialog by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    
+    var tempEvidenceUriString by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun createTempPictureUri(): Uri {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val imageFileName = "habit_proof_$timeStamp"
+        val storageDir = context.cacheDir
+        val file = File(storageDir, "$imageFileName.jpg")
+        if (file.exists()) file.delete()
+        file.createNewFile()
+
+        return FileProvider.getUriForFile(
+             context,
+             "${context.packageName}.fileprovider",
+             file
+        )
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uriStr = tempEvidenceUriString
+        if (success && uriStr != null) {
+            val habitId = selectedHabitIdForEvidence
+            if (habitId != null) {
+                val habit = habits.find { it.id == habitId }
+                if (habit != null) {
+                    onToggleHabit(habit.copy(isCompleted = true, evidenceUri = uriStr))
+                }
+            }
+            showEvidenceDialog = false
+            selectedHabitIdForEvidence = null
+            tempEvidenceUriString = null
+        } else {
+            Toast.makeText(context, "Gagal/Batal mengambil foto", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val habitId = selectedHabitIdForEvidence
+            if (habitId != null) {
+                val habit = habits.find { it.id == habitId }
+                if (habit != null) {
+                    onToggleHabit(habit.copy(isCompleted = true, evidenceUri = uri.toString()))
+                }
+            }
+            showEvidenceDialog = false
+            selectedHabitIdForEvidence = null
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -126,7 +191,7 @@ fun HabitPage(
                                 habit = habit, 
                                 onToggle = { 
                                     if (!habit.isCompleted) {
-                                        selectedHabitForEvidence = habit
+                                        selectedHabitIdForEvidence = habit.id
                                         showEvidenceDialog = true
                                     } else {
                                         onToggleHabit(habit.copy(isCompleted = false, evidenceUri = null))
@@ -160,15 +225,27 @@ fun HabitPage(
             )
         }
         
-        if (showEvidenceDialog && selectedHabitForEvidence != null) {
+        if (showEvidenceDialog && selectedHabitIdForEvidence != null) {
             com.bismilahexpo.habitseed.ui.components.EvidenceUploadDialog(
-                onDismiss = { showEvidenceDialog = false },
-                onEvidenceSelected = { uri ->
-                    selectedHabitForEvidence?.let { habit ->
-                         onToggleHabit(habit.copy(isCompleted = true, evidenceUri = uri.toString()))
-                    }
+                onDismiss = { 
                     showEvidenceDialog = false
-                    selectedHabitForEvidence = null
+                    selectedHabitIdForEvidence = null
+                },
+                onLaunchCamera = {
+                    try {
+                        val uri = createTempPictureUri()
+                        tempEvidenceUriString = uri.toString()
+                        cameraLauncher.launch(uri)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                },
+                onLaunchGallery = {
+                    try {
+                        galleryLauncher.launch("image/*")
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             )
         }

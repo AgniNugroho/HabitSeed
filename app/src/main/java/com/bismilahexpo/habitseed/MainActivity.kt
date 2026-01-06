@@ -96,6 +96,37 @@ fun AppNavigation(intent: Intent) {
     
     val localScope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    suspend fun refreshHabits() {
+        val currentUser = user
+        if (currentUser != null) {
+            try {
+                habits = Supabase.client.from("habits").select {
+                    filter { eq("user_id", currentUser.id) }
+                }.decodeList()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    suspend fun handleChallengeCompletion(habit: Habit) {
+        val currUser = user
+        val currChall = currentChallenge
+        if (currUser != null && currChall != null) {
+            try {
+                val challData = buildJsonObject {
+                    put("user_id", JsonPrimitive(currUser.id))
+                    put("challenge_id", JsonPrimitive(currChall.id!!))
+                    put("completed_at", JsonPrimitive(java.time.LocalDate.now().toString()))
+                }
+                Supabase.client.from("user_challenges").insert(challData)
+                isChallengeCompleted = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     
     LaunchedEffect(Unit) {
         Supabase.client.auth.sessionStatus.collectLatest { status ->
@@ -258,62 +289,61 @@ fun AppNavigation(intent: Intent) {
                                 try {
                                     if (updatedHabit.id != null) {
                                         var finalEvidenceUri = updatedHabit.evidenceUri
-                                        
-                                        if (finalEvidenceUri != null && (finalEvidenceUri.startsWith("content://") || finalEvidenceUri.startsWith("file://"))) {
+                                        val isNewLocalEvidence = finalEvidenceUri != null && 
+                                                (finalEvidenceUri.startsWith("content://") || finalEvidenceUri.startsWith("file://"))
+
+                                        if (isNewLocalEvidence) {
+                                            // 1. Upload file if it's a local URI
                                             StorageHelper.uploadFile(
                                                 context = context,
                                                 bucketName = "habit-evidence",
-                                                uri = android.net.Uri.parse(finalEvidenceUri),
+                                                uri = android.net.Uri.parse(finalEvidenceUri!!),
                                                 onSuccess = { publicUrl ->
+                                                    // 2. Perform DB update after successful upload
                                                     localScope.launch {
-                                                        val updateData = buildJsonObject {
-                                                            put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
-                                                            put("evidence_uri", JsonPrimitive(publicUrl))
+                                                        try {
+                                                            val updateData = buildJsonObject {
+                                                                put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
+                                                                put("evidence_uri", JsonPrimitive(publicUrl))
+                                                            }
+                                                            Supabase.client.from("habits").update(updateData) {
+                                                                filter { eq("id", updatedHabit.id) }
+                                                            }
+                                                            
+                                                            // SYNC CHALLENGE COMPLETION (inside success)
+                                                            if (updatedHabit.isChallenge && updatedHabit.isCompleted) {
+                                                                handleChallengeCompletion(updatedHabit)
+                                                            }
+                                                            
+                                                            refreshHabits()
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Gagal simpan data: ${e.message}", Toast.LENGTH_LONG).show()
                                                         }
-                                                        Supabase.client.from("habits").update(updateData) {
-                                                            filter { eq("id", updatedHabit.id) }
-                                                        }
-                                                        // Refresh
-                                                        val currentUser = user
-                                                        if (currentUser != null) {
-                                                            habits = Supabase.client.from("habits").select { 
-                                                                filter { eq("user_id", currentUser.id) }
-                                                            }.decodeList()
-                                                        }
+                                                    }
+                                                },
+                                                onError = { error ->
+                                                    localScope.launch {
+                                                        Toast.makeText(context, "Upload gagal: $error", Toast.LENGTH_LONG).show()
                                                     }
                                                 }
                                             )
-                                            // Handle sync completion locally if needed, or wait for refresh
                                         } else {
-                                             val updateData = buildJsonObject {
-                                                 put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
-                                             }
-                                             Supabase.client.from("habits").update(updateData) {
-                                                 filter { eq("id", updatedHabit.id) }
-                                             }
-                                        }
-
-                                        if (updatedHabit.isChallenge && updatedHabit.isCompleted) {
-                                            try {
-                                                val currUser = user
-                                                val currChall = currentChallenge
-                                                if (currUser != null && currChall != null) {
-                                                    val challData = buildJsonObject {
-                                                        put("user_id", JsonPrimitive(currUser.id))
-                                                        put("challenge_id", JsonPrimitive(currChall.id!!))
-                                                        put("completed_at", JsonPrimitive(java.time.LocalDate.now().toString()))
-                                                    }
-                                                    Supabase.client.from("user_challenges").insert(challData)
-                                                    isChallengeCompleted = true
+                                            // 1. Direct DB update if no new file to upload
+                                            val updateData = buildJsonObject {
+                                                put("is_completed", JsonPrimitive(updatedHabit.isCompleted))
+                                                if (finalEvidenceUri == null) {
+                                                    put("evidence_uri", JsonPrimitive(null as String?))
                                                 }
-                                            } catch (e: Exception) { e.printStackTrace() }
-                                        }
-                                        
-                                        val currentUser = user
-                                        if (currentUser != null) {
-                                            habits = Supabase.client.from("habits").select { 
-                                                filter { eq("user_id", currentUser.id) }
-                                            }.decodeList()
+                                            }
+                                            Supabase.client.from("habits").update(updateData) {
+                                                filter { eq("id", updatedHabit.id) }
+                                            }
+
+                                            if (updatedHabit.isChallenge && updatedHabit.isCompleted) {
+                                                handleChallengeCompletion(updatedHabit)
+                                            }
+                                            
+                                            refreshHabits()
                                         }
                                     }
                                 } catch(e: Exception) {

@@ -17,8 +17,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bismilahexpo.habitseed.ui.components.ProfileMenuCard
-import com.bismilahexpo.habitseed.ui.components.EvidenceUploadDialog
+import com.bismilahexpo.habitseed.ui.components.AvatarUploadDialog
 import com.bismilahexpo.habitseed.ui.theme.SeedGreen
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +42,44 @@ fun EditProfilePage(
     var showEditDialog by rememberSaveable { mutableStateOf(false) }
     var showAvatarDialog by rememberSaveable { mutableStateOf(false) }
     var newUserName by remember { mutableStateOf(currentUserName) }
+    
+    val context = LocalContext.current
+    var tempAvatarUriString by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun createTempAvatarUri(): Uri {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val imageFileName = "avatar_$timeStamp"
+        val storageDir = context.cacheDir
+        val file = File(storageDir, "$imageFileName.jpg")
+        if (file.exists()) file.delete()
+        file.createNewFile()
+
+        return FileProvider.getUriForFile(
+             context,
+             "${context.packageName}.fileprovider",
+             file
+        )
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uriStr = tempAvatarUriString
+        if (success && uriStr != null) {
+            onSaveAvatar(uriStr)
+            showAvatarDialog = false
+            tempAvatarUriString = null
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onSaveAvatar(uri.toString())
+            showAvatarDialog = false
+        }
+    }
     
     Scaffold(
         topBar = {
@@ -72,11 +120,23 @@ fun EditProfilePage(
             )
             
             if (showAvatarDialog) {
-                EvidenceUploadDialog(
+                AvatarUploadDialog(
                     onDismiss = { showAvatarDialog = false },
-                    onEvidenceSelected = { uri ->
-                         onSaveAvatar(uri.toString())
-                         showAvatarDialog = false
+                    onLaunchCamera = {
+                        try {
+                            val uri = createTempAvatarUri()
+                            tempAvatarUriString = uri.toString()
+                            cameraLauncher.launch(uri)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onLaunchGallery = {
+                        try {
+                            galleryLauncher.launch("image/*")
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
                     }
                 )
             }
